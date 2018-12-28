@@ -100,22 +100,35 @@ app.get('/callback', function(req, res) {
 
         // use the access token to access the Spotify Web API
         request.get(options, function(error, response, body) {
-          //console.log(body);
           const first = body.items[0];
+
+          // create CSV file
           const tracksLink = first.tracks.href;
+          const playlistName = first.name.replace(/ /g,'');
+          const playlistPath = path.join(dirPath, playlistName + ".csv");
+          console.log(playlistPath);
+          const writeStream = fs.createWriteStream(playlistPath);
+          writeStream.write("link, track name, artist, album\n");
+
+          // get the tracks
           const optionsForTracks = {
             url: tracksLink,
             headers: { 'Authorization': 'Bearer ' + access_token },
             json: true
           }
           // TODO: Page the results (only returns 100/time)
+          let tracksRemaining = 0;
+          while(tracksRemaining) {
+            break;
+          }
           request.get(optionsForTracks, function(error, response, body) {
             const track = body.items[0].track;
-            console.log(track.artists[0].name);
-            console.log(track.name);
-            console.log(track.album.name);
-            console.log(track.external_urls.spotify);
+            let trackString = track.external_urls.spotify + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "\n";
+            console.error(trackString);
+            writeStream.write(trackString);
+            writeStream.end();
           });
+
        //   body.items.forEach(function(playlist) {
        //     const tracksLink = playlist.tracks.href;
        //     console.warn(tracksLink);
