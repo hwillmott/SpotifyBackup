@@ -112,7 +112,6 @@ app.get('/callback', function(req, res) {
 
           // get the tracks
           let totalTracks = first.tracks.total;;
-          let offset = 0;
 
           let optionsForTracks = {
             url: tracksLink,
@@ -121,18 +120,17 @@ app.get('/callback', function(req, res) {
             offset: 0
           }
           let promises = [];
-          while(offset <= totalTracks) {
-            console.error('in while loop');
-            offset += 100;
+          while(optionsForTracks.offset <= totalTracks) {
+            optionsForTracks.offset += 100;
             let p = new Promise(function(resolve, reject) {
-              console.error('in promise');
+              
+              // get a page of tracks
               request.get(optionsForTracks, function(error, response, body) {
-                console.error('in request');
 
                 // write tracks to file
                 body.items.forEach(function(item) {
                   const track = item.track;
-                  const trackString = track.external_urls.spotify + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "\n";
+                  const trackString = track.name + "," + track.artists[0].name + "," + track.album.name + "," + track.external_urls.spotify + "\n";
                   writeStream.write(trackString);
 
                 }); // end forEach
