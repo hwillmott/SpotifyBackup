@@ -7,7 +7,10 @@
     "cookie-parser": "^1.4.3",
     "cors": "^2.8.4",
     "express": "~4.16.0",
+    "file-system": "~2.2.2",
     "lodash": "~4.17.11",
+    "os": "~0.1.1",
+    "path": "~0.12.7",
     "querystring": "~0.2.0",
     "request": "~2.83.0"
   }
