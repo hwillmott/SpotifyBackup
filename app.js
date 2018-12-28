@@ -111,38 +111,43 @@ app.get('/callback', function(req, res) {
           writeStream.write("link, track name, artist, album\n");
 
           // get the tracks
-          const optionsForTracks = {
+          let totalTracks = first.tracks.total;;
+          let offset = 0;
+
+          let optionsForTracks = {
             url: tracksLink,
             headers: { 'Authorization': 'Bearer ' + access_token },
-            json: true
+            json: true,
+            offset: 0
           }
-          // TODO: Page the results (only returns 100/time)
-          let tracksRemaining = 0;
-          while(tracksRemaining) {
-            break;
+          let promises = [];
+          while(offset <= totalTracks) {
+            console.error('in while loop');
+            offset += 100;
+            let p = new Promise(function(resolve, reject) {
+              console.error('in promise');
+              request.get(optionsForTracks, function(error, response, body) {
+                console.error('in request');
+
+                // write tracks to file
+                body.items.forEach(function(item) {
+                  const track = item.track;
+                  const trackString = track.external_urls.spotify + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "\n";
+                  writeStream.write(trackString);
+
+                }); // end forEach
+
+                // resolve the promise
+                resolve("yay!");
+              }); // end request
+            }); // end promise
+
+            promises.push(p);
           }
-          request.get(optionsForTracks, function(error, response, body) {
-            const track = body.items[0].track;
-            let trackString = track.external_urls.spotify + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "\n";
-            console.error(trackString);
-            writeStream.write(trackString);
+
+          Promise.all(promises).then(function() {
             writeStream.end();
           });
-
-       //   body.items.forEach(function(playlist) {
-       //     const tracksLink = playlist.tracks.href;
-       //     console.warn(tracksLink);
-       //     const optionsForTrack = {
-       //       url: 'https://app.spotify.com/v1/playlists/' + tracksLink + '/tracks',
-       //       headers: {'Authorization': 'Bearer ' + access_token },
-       //       json: true
-       //     }
-       //     request.get(options, function(error, response, body) {
-       //       //console.log(body);     
-       //     });
-       //     
-       //     console.log(playlist);
-       //   });
         });
 
         // we can also pass the token to the browser to make requests from there
