@@ -5,6 +5,7 @@ const lodash = require('lodash');
 const fs = require('file-system');
 const os = require('os');
 const path = require('path');
+const Promise = require('promise');  
 const querystring = require('querystring');
 const cookieParser = require('cookie-parser');
 const credentials = require('./credentials');
@@ -28,12 +29,24 @@ const generateRandomString = function(length) {
   return text;
 };
 
+/**
+ * Generates a directory path for the backup CSV files
+ * @return {string}
+ */
 const getDirPath = function() {
   const homedir = os.homedir();
   const dateString = new Date().toISOString();
   return path.join(homedir, "Desktop/SpotifyBackup-" + dateString);
 };
 
+/**
+ * Generates a directory path for the backup CSV files
+ * @param {string} url - API URL
+ * @param {number} offset - the offset index to fetch items
+ * @param {number} limit - the limit of items to retrieve
+ * @param {string} access_token - auth token
+ * @return {string}
+ */
 const getRequestOpts = function(url, limit, offset, access_token) {
   return {
     url: url,
@@ -44,6 +57,47 @@ const getRequestOpts = function(url, limit, offset, access_token) {
       limit: limit,
     }
   };
+};
+
+const savePlaylist = function(playlist, dirPath, access_token) {
+  const tracksLink = playlist.tracks.href;
+  const playlistName = playlist.name.replace(/ /g,'');
+  const playlistPath = path.join(dirPath, playlistName + ".csv");
+  const writeStream = fs.createWriteStream(playlistPath);
+  writeStream.write("link, track name, artist, album\n");
+
+  // get the tracks
+  let totalTracks = playlist.tracks.total;
+  let offset = 0;
+
+  const optionsForTracks = getRequestOpts(tracksLink, 100, offset, access_token);
+
+  let promises = [];
+  while(offset <= totalTracks) {
+    let p = new Promise(function(resolve, reject) {
+      // get a page of tracks
+      request.get(optionsForTracks, function(error, response, body) {
+
+        // write tracks to file
+        body.items.forEach(function(item) {
+          const track = item.track;
+          const trackString = item.added_at + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "," + track.external_urls.spotify + "\n";
+          writeStream.write(trackString);
+        }); // end forEach
+
+        // resolve the promise
+        resolve("yay!");
+      }); // end request
+    }); // end promise
+
+    offset += 100;
+    optionsForTracks.qs.offset += 100;
+    promises.push(p);
+  }
+
+  Promise.all(promises).then(function() {
+    writeStream.end();
+  });
 };
 
 const stateKey = 'spotify_auth_state';
@@ -70,6 +124,29 @@ app.get('/login', function(req, res) {
       state: state
     }));
 });
+
+const requestPlaylists = async function(options, dirPath, access_token) {
+  console.error(options);
+  let p = new Promise(function(resolve, reject) {
+    request.get(options, function(error, response, body) {
+      if (!body.items || body.items.length === 0) {
+        foundPlaylists = false;
+        return;
+      }
+
+      body.items.forEach(function(playlist) {
+        savePlaylist(playlist, dirPath, access_token);
+      });
+      console.error(body.next);
+      if (body.next) {
+        options.qs.offset += 10;
+        requestPlaylists(options);
+      }
+    });
+  });
+
+  await Promise.resolve(p);
+};
 
 app.get('/callback', function(req, res) {
 
@@ -108,60 +185,9 @@ app.get('/callback', function(req, res) {
         const access_token = body.access_token,
             refresh_token = body.refresh_token;
 
-        let playlistOffset = 0;
-
         const playlistUrl = 'https://api.spotify.com/v1/me/playlists';
-        const options = getRequestOpts(playlistUrl, 50, playlistOffset, access_token);
-
-        // use the access token to access the Spotify Web API
-        request.get(options, function(error, response, body) {
-          if (!body.items || body.items.length === 0) {
-            return;
-          }
-
-          body.items.forEach(function(playlist) {
-            // create CSV file
-            const tracksLink = playlist.tracks.href;
-            const playlistName = playlist.name.replace(/ /g,'');
-            const playlistPath = path.join(dirPath, playlistName + ".csv");
-            const writeStream = fs.createWriteStream(playlistPath);
-            writeStream.write("link, track name, artist, album\n");
-
-            // get the tracks
-            let totalTracks = playlist.tracks.total;
-            let offset = 0;
-
-            const optionsForTracks = getRequestOpts(tracksLink, 100, offset, access_token);
-            console.error(optionsForTracks);
-
-            let promises = [];
-            while(offset <= totalTracks) {
-              let p = new Promise(function(resolve, reject) {
-                // get a page of tracks
-                request.get(optionsForTracks, function(error, response, body) {
-
-                  // write tracks to file
-                  body.items.forEach(function(item) {
-                    const track = item.track;
-                    const trackString = item.added_at + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "," + track.external_urls.spotify + "\n";
-                    writeStream.write(trackString);
-                  }); // end forEach
-
-                  // resolve the promise
-                  resolve("yay!");
-                }); // end request
-              }); // end promise
-
-              offset += 100;
-              optionsForTracks.qs.offset += 100;
-              promises.push(p);
-            }
-
-            Promise.all(promises).then(function() {
-              writeStream.end();
-            });
-          });
-        });
+        const options = getRequestOpts(playlistUrl, 10, 0, access_token);
+        requestPlaylists(options, dirPath, access_token);
 
         // we can also pass the token to the browser to make requests from there
         res.redirect('/#' +
