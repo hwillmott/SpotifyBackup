@@ -61,6 +61,7 @@ const getRequestOpts = function(url, limit, offset, access_token) {
 
 const savePlaylist = function(playlist, dirPath, access_token) {
   const tracksLink = playlist.tracks.href;
+  // TODO: escape wild characters
   const playlistName = playlist.name.replace(/ /g,'');
   const playlistPath = path.join(dirPath, playlistName + ".csv");
   const writeStream = fs.createWriteStream(playlistPath);
@@ -68,15 +69,19 @@ const savePlaylist = function(playlist, dirPath, access_token) {
 
   // get the tracks
   let totalTracks = playlist.tracks.total;
-  let offset = 0;
 
-  const optionsForTracks = getRequestOpts(tracksLink, 100, offset, access_token);
+  const optionsForTracks = getRequestOpts(tracksLink, 100, 0, access_token);
 
   let promises = [];
-  while(offset <= totalTracks) {
+  while(optionsForTracks.qs.offset <= totalTracks) {
     let p = new Promise(function(resolve, reject) {
       // get a page of tracks
       request.get(optionsForTracks, function(error, response, body) {
+
+        if (!body.items || body.items.length === 0) {
+          resolve("yay!");
+          return;
+        }
 
         // write tracks to file
         body.items.forEach(function(item) {
@@ -90,7 +95,6 @@ const savePlaylist = function(playlist, dirPath, access_token) {
       }); // end request
     }); // end promise
 
-    offset += 100;
     optionsForTracks.qs.offset += 100;
     promises.push(p);
   }
@@ -114,7 +118,7 @@ app.get('/login', function(req, res) {
   res.cookie(stateKey, state);
 
   // your application requests authorization
-  const scope = 'user-read-private user-read-email';
+  const scope = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative';
   res.redirect('https://accounts.spotify.com/authorize?' +
     querystring.stringify({
       response_type: 'code',
@@ -129,29 +133,34 @@ const requestPlaylists = async function(options, dirPath, access_token) {
   console.error(options);
   let p = new Promise(function(resolve, reject) {
     request.get(options, function(error, response, body) {
+      //console.error(body);
+      if (error) {
+        console.error(error);
+        reject(error);
+      }
       if (!body.items || body.items.length === 0) {
-        foundPlaylists = false;
+        console.error('found no playlists');
         return;
       }
 
       body.items.forEach(function(playlist) {
         savePlaylist(playlist, dirPath, access_token);
       });
-      console.error(body.next);
-      if (body.next) {
-        options.qs.offset += 10;
-        requestPlaylists(options);
-      }
+      resolve(body.next);
     });
   });
 
-  await Promise.resolve(p);
+  const nextUrl = await Promise.resolve(p);
+  if (nextUrl) {
+    options.qs.offset += 50;
+    requestPlaylists(options, dirPath, access_token);
+  }
 };
 
 app.get('/callback', function(req, res) {
 
   // your application requests refresh and access tokens
-  // after checking the state parameter
+  // after checking the state parameteiir
 
   const code = req.query.code || null;
   const state = req.query.state || null;
@@ -186,7 +195,7 @@ app.get('/callback', function(req, res) {
             refresh_token = body.refresh_token;
 
         const playlistUrl = 'https://api.spotify.com/v1/me/playlists';
-        const options = getRequestOpts(playlistUrl, 10, 0, access_token);
+        const options = getRequestOpts(playlistUrl, 50, 0, access_token);
         requestPlaylists(options, dirPath, access_token);
 
         // we can also pass the token to the browser to make requests from there
