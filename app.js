@@ -124,7 +124,6 @@ app.get('/callback', function(req, res) {
             const tracksLink = playlist.tracks.href;
             const playlistName = playlist.name.replace(/ /g,'');
             const playlistPath = path.join(dirPath, playlistName + ".csv");
-            console.log(playlistPath);
             const writeStream = fs.createWriteStream(playlistPath);
             writeStream.write("link, track name, artist, album\n");
 
@@ -132,14 +131,9 @@ app.get('/callback', function(req, res) {
             let totalTracks = playlist.tracks.total;
             let offset = 0;
 
-            let optionsForTracks = {
-              url: tracksLink,
-              headers: { 'Authorization': 'Bearer ' + access_token },
-              json: true,
-              qs: {
-                offset: offset
-              }
-            }
+            const optionsForTracks = getRequestOpts(tracksLink, 100, offset, access_token);
+            console.error(optionsForTracks);
+
             let promises = [];
             while(offset <= totalTracks) {
               let p = new Promise(function(resolve, reject) {
@@ -151,7 +145,6 @@ app.get('/callback', function(req, res) {
                     const track = item.track;
                     const trackString = item.added_at + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "," + track.external_urls.spotify + "\n";
                     writeStream.write(trackString);
-
                   }); // end forEach
 
                   // resolve the promise
