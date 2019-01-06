@@ -63,7 +63,8 @@ const savePlaylist = function(playlist, dirPath, access_token) {
   const tracksLink = playlist.tracks.href;
   // TODO: escape wild characters
   const playlistName = playlist.name.replace(/ /g,'');
-  const playlistPath = path.join(dirPath, playlistName + ".csv");
+  const ownerName = playlist.owner.id;
+  const playlistPath = path.join(dirPath, playlistName + "-" + ownerName + ".csv");
   const writeStream = fs.createWriteStream(playlistPath);
   writeStream.write("link, track name, artist, album\n");
 
@@ -86,7 +87,7 @@ const savePlaylist = function(playlist, dirPath, access_token) {
         // write tracks to file
         body.items.forEach(function(item) {
           const track = item.track;
-          const trackString = item.added_at + "," + track.name + "," + track.artists[0].name + "," + track.album.name + "," + track.external_urls.spotify + "\n";
+          const trackString = track.name + "," + track.artists[0].name + "," + track.album.name + "," + item.added_at + "," + track.external_urls.spotify + "\n";
           writeStream.write(trackString);
         }); // end forEach
 
