@@ -87,7 +87,10 @@ const savePlaylist = function(playlist, dirPath, access_token) {
         // write tracks to file
         body.items.forEach(function(item) {
           const track = item.track;
-          const trackString = track.name + "," + track.artists[0].name + "," + track.album.name + "," + item.added_at + "," + track.external_urls.spotify + "\n";
+          const trackName = track.name.replace(/,/g, ' ');
+          const artistName = track.artists[0].name.replace(/,/g, ' ');
+          const albumName = track.album.name.replace(/,/g, ' ');
+          const trackString = trackName + "," + artistName + "," + albumName + "," + item.added_at + "," + track.external_urls.spotify + "\n";
           writeStream.write(trackString);
         }); // end forEach
 
